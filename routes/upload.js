@@ -1,7 +1,7 @@
 const express = require("express");
 const multer = require("multer");
-const parsePDF = require("../services/pdfParser");
-const chunkText = require("../utils/chunkText");
+const { parsePDF } = require("../services/pdfParser");
+const { chunkWithLLM }= require("../utils/chunkText");
 const getEmbedding = require("../services/embeddingService");
 const { saveChunks } = require("../services/vectorStore");
 
@@ -9,19 +9,26 @@ const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
 router.post("/", upload.single("resume"), async (req, res) => {
-    const text = await parsePDF(req.file.path);
-    const chunks = chunkText(text);
+    try {
+        // Step 1 — parse PDF to raw text
+        const rawText = await parsePDF(req.file.path);
 
-    const embeddedChunks = [];
+        // Step 2 — Gemini chunks and structures it
+        const structuredData = await chunkWithLLM(rawText);
 
-    for (let chunk of chunks) {
-        const embedding = await getEmbedding(chunk);
-        embeddedChunks.push({ chunk, embedding });
+        // Step 3 — send back clean JSON (ready for RAG)
+        res.json({
+            success: true,
+            data: structuredData
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
-
-    saveChunks(embeddedChunks);
-
-    res.json({ message: "Resume processed successfully" });
 });
+
 
 module.exports = router;

@@ -29,10 +29,11 @@ router.post("/", async (req, res) => {
     }));
 
     const topChunks = scored
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
-        .map(c => c.chunk)
-        .join("\n");
+    .filter(c => c.score > 0) // ❗ only relevant chunks
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2) // reduce noise
+    .map(c => c.chunk)
+    .join("\n");
 
     const answer = await askLLM(topChunks, question);
 
