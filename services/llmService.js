@@ -1,103 +1,33 @@
-const askLLM = async (context, question) => {
-    const q = question.toLowerCase();
+const Groq = require("groq-sdk");
 
-    if (
-    q.includes("skills") ||
-    q.includes("interest") ||
-    q.includes("technology") ||
-    q.includes("tech") ||
-    q.includes("tools")
-) {
-        return extractSection(context, {
-            start: ["skills", "proficient", "proficiency", "tools", "libraries","intrests"],
-            stop: ["project", "experience", "education"]
-        }, "Skills");
-    }
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-    if (q.includes("project")) {
-        return extractSection(context, {
-            start: ["project"],
-            stop: ["experience", "education", "skills"]
-        }, "Projects");
-    }
+async function askLLM(chunks, question) {
+    // build context from retrieved chunks
+    const context = chunks
+        .map((chunk, i) => `[Chunk ${i + 1}] ${chunk}`)
+        .join("\n\n");
 
-    if (q.includes("experience") || q.includes("intern") || q.includes("internship")) {
-        return extractSection(context, {
-            start: ["experience", "intern"],
-            stop: ["project", "education", "skills"]
-        }, "Experience");
-    }
+    const prompt = `
+        You are a resume analyzer assistant.
+        Answer the user's question using ONLY the resume information provided below.
+        If the answer is not in the context, say "I could not find this information in the resume."
+        
+        Resume Context:
+        ${context}
+        
+        User Question: ${question}
+        
+        Answer:
+    `;
 
-    return `Relevant Information:\n\n${context}`;
-};
-
-
-// 🔥 smarter section extractor
-const extractSection = (text, { start, stop }, title) => {
-    const lines = text.split("\n");
-
-    let capture = false;
-    let result = [];
-
-    for (let line of lines) {
-        const lower = line.toLowerCase().trim();
-
-        // ✅ STRICT START CONDITION (only headers)
-        if (!capture && isSectionHeader(lower, start)) {
-            capture = true;
-            continue; // skip header line itself
-        }
-
-        // ✅ STOP only AFTER capture has started
-        if (capture && isSectionHeader(lower, stop)) {
-            break;
-        }
-
-        if (capture && isValidLine(lower)) {
-            result.push(cleanLine(line));
-        }
-    }
-
-    return formatList(title, result);
-};
-const isSectionHeader = (line, keywords) => {
-    return keywords.some(k => {
-        // ✅ match full section titles, not random words
-        return (
-            line === k ||
-            line.includes(`${k} &`) ||
-            line.includes(`${k}:`) ||
-            line.startsWith(k + " ")
-        );
+    const response = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3  // lower = more factual, less creative
     });
-};
 
+    return response.choices[0].message.content;
+}
 
-// 🔍 filter out junk lines
-const isValidLine = (line) => {
-    if (!line) return false;
-
-    // remove garbage lines
-    if (line.length < 3) return false;
-    if (/^[^a-zA-Z0-9]+$/.test(line)) return false;
-
-    return true;
-};
-
-
-// ✨ clean formatting
-const cleanLine = (line) => {
-    return line.replace(/•/g, "").trim();
-};
-
-
-// helper function
-const formatList = (title, items) => {
-    const unique = [...new Set(items)];
-
-    if (!unique.length) return `${title}: Not found`;
-
-    return `${title}:\n` + unique.map(i => `- ${i}`).join("\n");
-};
-
-module.exports = askLLM;
+module.exports = { askLLM };

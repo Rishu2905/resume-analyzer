@@ -45,16 +45,20 @@ async function saveChunks(structuredData, resumeId) {
     return { saved: chunks.length };
 }
 
-async function queryChunks(queryText, nResults = 5) {
+async function queryChunks(queryText, nResults = 5, filterSection = null) {
     const collection = await getCollection();
     const queryEmbedding = await getEmbedding(queryText);
 
-    const results = await collection.query({
-        queryEmbeddings: [queryEmbedding],  // ← raw vector
+    const queryParams = {
+        queryEmbeddings: [queryEmbedding],
         nResults,
-    });
+    };
 
-    return results;
+    if (filterSection) {
+        queryParams.where = { section: filterSection };
+    }
+
+    return await collection.query(queryParams);
 }
 
 function buildChunks(data, resumeId) {
